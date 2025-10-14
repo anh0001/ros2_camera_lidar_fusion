@@ -1,6 +1,6 @@
 lidar:
-  lidar_topic: /rslidar_points
-  frame_id: rslidar
+  lidar_topic: /livox/lidar
+  frame_id: livox_frame
 
 camera:
   image_topic: /camera/camera/color/image_raw
