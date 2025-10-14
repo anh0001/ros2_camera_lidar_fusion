@@ -14,7 +14,7 @@ chessboard:
   pattern_size:
     rows: 6
     columns: 8
-  square_size_meters: 0.03
+  square_size_meters: 0.03c
 
 general:
   config_folder: /home/mobi/codes/ros2-lidar-rt-depth/config
@@ -22,6 +22,10 @@ general:
   correspondence_file: ros2_camera_lidar_fusion_correspondences.txt
   camera_intrinsic_calibration: camera_intrinsic_calibration.yaml
   camera_extrinsic_calibration: camera_extrinsic_calibration.yaml
+  # Maximum number of chessboard samples to use for intrinsic calibration.
+  # Keeps calibration fast and prevents long shutdowns.
+  max_intrinsic_samples: 50
+  # Press 'c' in the OpenCV window to trigger calibration when ready.
   slop: 0.1
   max_file_saved: 10
   keyboard_listener: True

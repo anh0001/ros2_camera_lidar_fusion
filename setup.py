@@ -11,6 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/general_configuration.yaml']),
+        ('share/' + package_name + '/launch', ['launch/realsense_camera_intrinsic_calibration.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
