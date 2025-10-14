@@ -8,6 +8,7 @@ import cv2
 import yaml
 import numpy as np
 from datetime import datetime
+import os
 
 from ros2_camera_lidar_fusion.read_yaml import extract_configuration
 
@@ -42,6 +43,7 @@ class CameraCalibrationNode(Node):
         self.objp *= self.square_size
 
         self.get_logger().info("Camera calibration node initialized. Waiting for images...")
+        self.get_logger().info(f"Will save calibration to {self.output_path}/{self.file}")
 
     def image_callback(self, msg):
         try:
@@ -59,7 +61,7 @@ class CameraCalibrationNode(Node):
                 self.img_points.append(refined_corners)
 
                 cv2.drawChessboardCorners(cv_image, (self.chessboard_cols, self.chessboard_rows), refined_corners, ret)
-                self.get_logger().info("Chessboard detected and points added.")
+                self.get_logger().info(f"Chessboard detected and points added. Samples: {len(self.img_points)}")
             else:
                 self.get_logger().warn("Chessboard not detected in image.")
 
@@ -71,7 +73,9 @@ class CameraCalibrationNode(Node):
 
     def save_calibration(self):
         if len(self.obj_points) < 10:
-            self.get_logger().error("Not enough images for calibration. At least 10 are required.")
+            self.get_logger().error(
+                f"Not enough images for calibration. Collected {len(self.obj_points)} / 10 minimum."
+            )
             return
 
         ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
@@ -98,14 +102,15 @@ class CameraCalibrationNode(Node):
                 'square_size_meters': self.square_size
             },
             'image_size': {
-                'width': 640,
-                'height': 480
+                'width': int(self.image_width),
+                'height': int(self.image_height)
             },
             'rms_reprojection_error': ret
         }
 
         output_file = f"{self.output_path}/{self.file}"
         try:
+            os.makedirs(self.output_path, exist_ok=True)
             with open(output_file, 'w') as file:
                 yaml.dump(calibration_data, file)
             self.get_logger().info(f"Calibration saved to {output_file}")
