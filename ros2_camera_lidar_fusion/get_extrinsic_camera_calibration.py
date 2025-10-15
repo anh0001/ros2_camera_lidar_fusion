@@ -17,12 +17,14 @@ class CameraLidarExtrinsicNode(Node):
         if config_file is None:
             self.get_logger().error("Failed to extract configuration file.")
             return
-        
-        self.corr_file = config_file['general']['correspondence_file']
-        self.corr_file = f'/ros2_ws/src/ros2_camera_lidar_fusion/data/{self.corr_file}'
-        self.camera_yaml = config_file['general']['camera_intrinsic_calibration']
-        self.camera_yaml = f'/ros2_ws/src/ros2_camera_lidar_fusion/config/{self.camera_yaml}'
-        self.output_dir = config_file['general']['config_folder']
+
+        # Use the configured data and config folders instead of hardcoded paths
+        data_folder = config_file['general']['data_folder']
+        config_folder = config_file['general']['config_folder']
+
+        self.corr_file = os.path.join(data_folder, config_file['general']['correspondence_file'])
+        self.camera_yaml = os.path.join(config_folder, config_file['general']['camera_intrinsic_calibration'])
+        self.output_dir = config_folder
         self.file = config_file['general']['camera_extrinsic_calibration']
 
         self.get_logger().info('Starting extrinsic calibration...')
