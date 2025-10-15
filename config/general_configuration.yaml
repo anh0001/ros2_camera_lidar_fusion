@@ -6,8 +6,8 @@ camera:
   image_topic: /camera/camera/color/image_raw
   projected_topic: /camera/camera/color/projected_image
   image_size:
-    width: 640
-    height: 480
+    width: 1920
+    height: 1280
   frame_id: camera
 
 chessboard:
