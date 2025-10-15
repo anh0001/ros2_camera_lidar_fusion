@@ -32,7 +32,19 @@ def load_extrinsic_matrix(yaml_path: str) -> np.ndarray:
         raise ValueError("Extrinsic matrix is not 4x4.")
     return T
 
-def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray):
+def _reshape_camera_matrix(mat_any) -> np.ndarray:
+    try:
+        arr = np.array(mat_any, dtype=np.float64)
+        if arr.size == 9:
+            return arr.reshape(3, 3)
+        if arr.shape == (3, 3):
+            return arr
+    except Exception:
+        pass
+    raise ValueError("Invalid camera_matrix format; expected 3x3 or flat 9 list.")
+
+
+def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray, str):
     if not os.path.isfile(yaml_path):
         raise FileNotFoundError(f"No camera calibration file: {yaml_path}")
 
@@ -40,12 +52,14 @@ def load_camera_calibration(yaml_path: str) -> (np.ndarray, np.ndarray):
         calib_data = yaml.safe_load(f)
 
     cam_mat_data = calib_data['camera_matrix']['data']
-    camera_matrix = np.array(cam_mat_data, dtype=np.float64)
+    camera_matrix = _reshape_camera_matrix(cam_mat_data)
 
     dist_data = calib_data['distortion_coefficients']['data']
     dist_coeffs = np.array(dist_data, dtype=np.float64).reshape((1, -1))
 
-    return camera_matrix, dist_coeffs
+    distortion_model = calib_data.get('distortion_model', 'plumb_bob')
+
+    return camera_matrix, dist_coeffs, distortion_model
 
 
 def pointcloud2_to_xyz_array_fast(cloud_msg: PointCloud2, skip_rate: int = 1) -> np.ndarray:
@@ -94,10 +108,11 @@ class LidarCameraProjectionNode(Node):
 
         camera_yaml = config_file['general']['camera_intrinsic_calibration']
         camera_yaml = os.path.join(config_folder, camera_yaml)
-        self.camera_matrix, self.dist_coeffs = load_camera_calibration(camera_yaml)
+        self.camera_matrix, self.dist_coeffs, self.distortion_model = load_camera_calibration(camera_yaml)
 
         self.get_logger().info("Loaded extrinsic:\n{}".format(self.T_lidar_to_cam))
         self.get_logger().info("Camera matrix:\n{}".format(self.camera_matrix))
+        self.get_logger().info("Distortion model: {}".format(self.distortion_model))
         self.get_logger().info("Distortion coeffs:\n{}".format(self.dist_coeffs))
 
         lidar_topic = config_file['lidar']['lidar_topic']
@@ -152,12 +167,23 @@ class LidarCameraProjectionNode(Node):
         
         rvec = np.zeros((3,1), dtype=np.float64)
         tvec = np.zeros((3,1), dtype=np.float64)
-        image_points, _ = cv2.projectPoints(
-            xyz_cam_front,
-            rvec, tvec,
-            self.camera_matrix,
-            self.dist_coeffs
-        )
+        if str(self.distortion_model).lower() == 'equidistant':
+            # Use OpenCV fisheye projection for equidistant model
+            objp = xyz_cam_front.reshape(-1, 1, 3)
+            image_points, _ = cv2.fisheye.projectPoints(
+                objp,
+                rvec,
+                tvec,
+                self.camera_matrix,
+                self.dist_coeffs
+            )
+        else:
+            image_points, _ = cv2.projectPoints(
+                xyz_cam_front,
+                rvec, tvec,
+                self.camera_matrix,
+                self.dist_coeffs
+            )
         image_points = image_points.reshape(-1, 2)
 
         h, w = cv_image.shape[:2]

@@ -30,6 +30,14 @@ class CameraLidarExtrinsicNode(Node):
         self.get_logger().info('Starting extrinsic calibration...')
         self.solve_extrinsic_with_pnp()
 
+    def _reshape_camera_matrix(self, mat_any) -> np.ndarray:
+        arr = np.array(mat_any, dtype=np.float64)
+        if arr.size == 9:
+            return arr.reshape(3, 3)
+        if arr.shape == (3, 3):
+            return arr
+        raise ValueError("Invalid camera_matrix format; expected 3x3 or flat 9 list.")
+
     def load_camera_calibration(self, yaml_path: str):
         """Loads camera calibration parameters from a YAML file."""
         if not os.path.isfile(yaml_path):
@@ -39,16 +47,18 @@ class CameraLidarExtrinsicNode(Node):
             config = yaml.safe_load(f)
 
         mat_data = config['camera_matrix']['data']
-        camera_matrix = np.array(mat_data, dtype=np.float64)
+        camera_matrix = self._reshape_camera_matrix(mat_data)
         dist_data = config['distortion_coefficients']['data']
         dist_coeffs = np.array(dist_data, dtype=np.float64).reshape((1, -1))
+        distortion_model = config.get('distortion_model', 'plumb_bob')
 
-        return camera_matrix, dist_coeffs
+        return camera_matrix, dist_coeffs, distortion_model
 
     def solve_extrinsic_with_pnp(self):
         """Solves for extrinsic parameters using 2D-3D correspondences and camera calibration."""
-        camera_matrix, dist_coeffs = self.load_camera_calibration(self.camera_yaml)
+        camera_matrix, dist_coeffs, distortion_model = self.load_camera_calibration(self.camera_yaml)
         self.get_logger().info(f"Camera matrix:\n{camera_matrix}")
+        self.get_logger().info(f"Distortion model: {distortion_model}")
         self.get_logger().info(f"Distortion coefficients: {dist_coeffs}")
 
         if not os.path.isfile(self.corr_file):
@@ -77,13 +87,27 @@ class CameraLidarExtrinsicNode(Node):
         if num_points < 4:
             raise ValueError("At least 4 correspondences are required for solvePnP")
 
-        success, rvec, tvec = cv2.solvePnP(
-            pts_3d,
-            pts_2d,
-            camera_matrix,
-            dist_coeffs,
-            flags=cv2.SOLVEPNP_ITERATIVE
-        )
+        # Handle fisheye (equidistant) image points properly by undistorting first.
+        if str(distortion_model).lower() == 'equidistant':
+            # Undistort to rectified pixel coordinates using P=K, then solve with zero distortion
+            pts_2d_cv = pts_2d.reshape(-1, 1, 2)
+            undistorted = cv2.fisheye.undistortPoints(pts_2d_cv, camera_matrix, dist_coeffs, P=camera_matrix)
+            undistorted = undistorted.reshape(-1, 2)
+            success, rvec, tvec = cv2.solvePnP(
+                pts_3d,
+                undistorted,
+                camera_matrix,
+                None,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
+        else:
+            success, rvec, tvec = cv2.solvePnP(
+                pts_3d,
+                pts_2d,
+                camera_matrix,
+                dist_coeffs,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+            )
 
         if not success:
             raise RuntimeError("solvePnP failed to find a solution.")
