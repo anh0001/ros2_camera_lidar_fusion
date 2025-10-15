@@ -137,15 +137,20 @@ class ImageCloudCorrespondenceNode(Node):
             self.get_logger().info(f"\nSelected {len(cloud_points)} points in the cloud.\n")
 
             out_txt = os.path.join(self.data_dir, self.file)
-            with open(out_txt, 'w') as f:
-                f.write("# u, v, x, y, z\n")
-                min_len = min(len(image_points), len(cloud_points))
+            # Append to a single correspondence file so multiple poses (e.g., near/medium/far)
+            # can be collected in one session. Add a header once and a pose separator per pair.
+            write_header = (not os.path.exists(out_txt)) or (os.path.getsize(out_txt) == 0)
+            min_len = min(len(image_points), len(cloud_points))
+            with open(out_txt, 'a') as f:
+                if write_header:
+                    f.write("# u, v, x, y, z\n")
+                f.write(f"# ---- pair: {prefix} ----\n")
                 for i in range(min_len):
                     (u, v) = image_points[i]
                     (x, y, z) = cloud_points[i]
                     f.write(f"{u},{v},{x},{y},{z}\n")
 
-            self.get_logger().info(f"Saved {min_len} correspondences in: {out_txt}")
+            self.get_logger().info(f"Appended {min_len} correspondences to: {out_txt}")
             self.get_logger().info("========================================")
 
         self.get_logger().info("\nProcessing complete! Correspondences saved for all pairs.")
