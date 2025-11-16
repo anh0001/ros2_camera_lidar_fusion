@@ -5,7 +5,7 @@
 
 A ROS2 package for calculating **intrinsic** and **extrinsic calibration** between camera and LiDAR sensors. This repository provides an intuitive workflow to fuse data from these sensors, enabling precise projection of LiDAR points into the camera frame and offering an efficient approach to sensor fusion.
 
-Note (when used inside the ros2-lidar-rt-depth workspace): Build and run with the workspace’s colcon build. The Docker instructions below are for the upstream standalone repo and are not required here.
+Note (when used inside the ros2-lidar-rt-depth workspace): Build and run with the workspace's colcon build. The Docker instructions below are for the upstream standalone repo and are not required here.
 
 ## Visual Overview
 | **Static Sensors** | **Moving Sensors** |
