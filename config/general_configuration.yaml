@@ -42,7 +42,7 @@ general:
   # ApproximateTimeSynchronizer will sync messages with timestamps within this window.
   # Increase this value if camera and LiDAR have large timestamp offsets (e.g., from rosbag playback).
   # Typical values: 0.1 for live sensors, 5-10 for rosbags with timestamp drift.
-  slop: 10
+  slop: 0.1
   # Maximum number of synchronized data samples to save during data collection
   max_file_saved: 10
   # Enable keyboard listener for interactive calibration commands (press 'c' to capture)
