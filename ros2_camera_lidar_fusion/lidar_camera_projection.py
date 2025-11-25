@@ -123,10 +123,13 @@ class LidarCameraProjectionNode(Node):
         self.image_sub = Subscriber(self, Image, image_topic)
         self.lidar_sub = Subscriber(self, PointCloud2, lidar_topic)
 
+        slop = float(config_file['general'].get('slop', 0.1))
+        self.get_logger().info(f"Using time synchronization slop: {slop} seconds")
+
         self.ts = ApproximateTimeSynchronizer(
             [self.image_sub, self.lidar_sub],
             queue_size=5,
-            slop=0.07
+            slop=slop
         )
         self.ts.registerCallback(self.sync_callback)
 
@@ -157,6 +160,7 @@ class LidarCameraProjectionNode(Node):
 
         mask_in_front = (xyz_cam[:, 2] > 0.0)
         xyz_cam_front = xyz_cam[mask_in_front]
+        xyz_lidar_front = xyz_lidar_f64[mask_in_front]
         n_front = xyz_cam_front.shape[0]
         if n_front == 0:
             self.get_logger().info("No points in front of camera (z>0).")
@@ -209,8 +213,9 @@ class LidarCameraProjectionNode(Node):
         roi_y2 = min(h, roi_y1 + roi_height)
 
         roi_distances = []
+        roi_points_lidar = []
 
-        for (u, v), color, distance in zip(image_points, colors_bgr, distances):
+        for (u, v), color, distance, lidar_point in zip(image_points, colors_bgr, distances, xyz_lidar_front):
             u_int = int(u + 0.5)
             v_int = int(v + 0.5)
             if 0 <= u_int < w and 0 <= v_int < h:
@@ -218,6 +223,7 @@ class LidarCameraProjectionNode(Node):
                 cv2.circle(cv_image, (u_int, v_int), 2, color_tuple, -1)
                 if roi_x1 <= u_int < roi_x2 and roi_y1 <= v_int < roi_y2:
                     roi_distances.append(distance)
+                    roi_points_lidar.append(lidar_point)
         roi_width_px = roi_x2 - roi_x1
         roi_height_px = roi_y2 - roi_y1
         if roi_width_px > 1 and roi_height_px > 1:
@@ -236,23 +242,36 @@ class LidarCameraProjectionNode(Node):
             distance_text = "N/A"
             text_color = (0, 255, 255)
 
+        if roi_points_lidar:
+            roi_points_array = np.asarray(roi_points_lidar, dtype=np.float64)
+            mode_resolution = 0.05  # bucketize to 5 cm to find a stable mode
+            mode_buckets = np.round(roi_points_array / mode_resolution) * mode_resolution
+            unique_points, point_counts = np.unique(mode_buckets, axis=0, return_counts=True)
+            dominant_idx = int(np.argmax(point_counts))
+            dominant_xyz = unique_points[dominant_idx]
+            xyz_text = f"x:{dominant_xyz[0]:.2f} y:{dominant_xyz[1]:.2f} z:{dominant_xyz[2]:.2f} m"
+            xyz_text_color = text_color
+        else:
+            xyz_text = "x:N/A y:N/A z:N/A"
+            xyz_text_color = (0, 255, 255)
+
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.6
         thickness = 2
-        (text_width, text_height), _ = cv2.getTextSize(distance_text, font, font_scale, thickness)
-        text_x = max(0, int(round((roi_x1 + roi_x2) * 0.5 - text_width * 0.5)))
-        text_y = min(h - 6, roi_y2 - 8)
-        text_origin = (text_x, max(roi_y1 + text_height + 4, text_y))
-        cv2.putText(
-            cv_image,
-            distance_text,
-            text_origin,
-            font,
-            font_scale,
-            text_color,
-            thickness,
-            cv2.LINE_AA
-        )
+        (distance_width, distance_height), _ = cv2.getTextSize(distance_text, font, font_scale, thickness)
+        (xyz_width, xyz_height), _ = cv2.getTextSize(xyz_text, font, font_scale, thickness)
+
+        distance_x = max(0, int(round((roi_x1 + roi_x2) * 0.5 - distance_width * 0.5)))
+        distance_y = min(h - 6, roi_y2 - 8)
+        distance_origin = (distance_x, max(roi_y1 + distance_height + 4, distance_y))
+
+        xyz_x = max(0, int(round((roi_x1 + roi_x2) * 0.5 - xyz_width * 0.5)))
+        xyz_target_y = distance_origin[1] - distance_height - 6
+        xyz_y = max(roi_y1 + xyz_height + 4, xyz_target_y)
+        xyz_origin = (xyz_x, xyz_y)
+
+        cv2.putText(cv_image, xyz_text, xyz_origin, font, font_scale, xyz_text_color, thickness, cv2.LINE_AA)
+        cv2.putText(cv_image, distance_text, distance_origin, font, font_scale, text_color, thickness, cv2.LINE_AA)
 
         legend_margin = 10
         available_width = w - 2 * legend_margin

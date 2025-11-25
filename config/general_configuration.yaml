@@ -1,33 +1,53 @@
 lidar:
-  lidar_topic: /livox/lidar
+  # ROS2 topic publishing LiDAR point cloud (sensor_msgs/PointCloud2)
+  lidar_topic: /livox/lidar_converted
+  # Frame ID of the LiDAR sensor
   frame_id: livox_frame
 
 camera:
-  image_topic: /camera/image_raw
+  # ROS2 topic publishing raw camera images (sensor_msgs/Image)
+  image_topic: /image_raw
+  # Output topic for projected image overlay (LiDAR points drawn on camera image)
   projected_topic: /camera/projected_image
+  # Camera resolution (must match actual camera and intrinsic calibration)
   image_size:
     width: 1920
     height: 1280
+  # Frame ID of the camera
   frame_id: camera
 
 chessboard:
+  # Chessboard pattern dimensions (interior corners) for intrinsic calibration
   pattern_size:
     rows: 6
     columns: 8
+  # Physical size of each chessboard square (meters)
   square_size_meters: 0.03
 
 general:
-  config_folder: /home/mobi/codes/ros2-lidar-rt-depth/config
-  data_folder: /home/mobi/codes/ros2-lidar-rt-depth/data
+  # Directory containing calibration files (intrinsic and extrinsic YAML files)
+  config_folder: /home/anhar/codes/ros2-lidar-rt-depth/config
+  # Directory for saving synchronized camera/LiDAR data samples during calibration
+  data_folder: /home/anhar/codes/ros2-lidar-rt-depth/data
+  # Filename for storing picked correspondences (3D LiDAR <-> 2D image point pairs)
   correspondence_file: ros2_camera_lidar_fusion_correspondences.txt
+  # Camera intrinsic calibration file (K matrix, distortion coefficients, distortion model)
   camera_intrinsic_calibration: tier4_c1_198_1920x1280.yaml
+  # Camera-LiDAR extrinsic calibration file (4x4 transformation matrix from LiDAR to camera frame)
   camera_extrinsic_calibration: camera_extrinsic_calibration.yaml
   # Maximum number of chessboard samples to use for intrinsic calibration.
   # Keeps calibration fast and prevents long shutdowns.
   max_intrinsic_samples: 50
-  # Press 'c' in the OpenCV window to trigger calibration when ready.
-  slop: 0.1
+  # Time synchronization tolerance (seconds) for matching camera and LiDAR messages.
+  # ApproximateTimeSynchronizer will sync messages with timestamps within this window.
+  # Increase this value if camera and LiDAR have large timestamp offsets (e.g., from rosbag playback).
+  # Typical values: 0.1 for live sensors, 5-10 for rosbags with timestamp drift.
+  slop: 10
+  # Maximum number of synchronized data samples to save during data collection
   max_file_saved: 10
+  # Enable keyboard listener for interactive calibration commands (press 'c' to capture)
   keyboard_listener: True
+  # Enable camera intrinsic calibration workflow
   get_intrinsics: True
+  # Enable camera-LiDAR extrinsic calibration workflow
   get_extrinsics: True
